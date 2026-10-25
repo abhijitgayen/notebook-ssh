@@ -40,7 +40,7 @@ os.environ["TUNNEL_PROVIDER"] = "cloudflared"  # Or "ngrok"
 # os.environ["NGROK_AUTHTOKEN"] = "your_ngrok_authtoken" # Required if TUNNEL_PROVIDER="ngrok"
 
 # 2. Clone repo and execute setup
-!git clone https://github.com/your-username/colab-ssh-tunnel.git && cd colab-ssh-tunnel && python3 setup_notebook.py
+!git clone https://github.com/abhijitgayen/notebook-ssh.git && cd notebook-ssh && python3 setup_notebook.py
 ```
 
 ---
