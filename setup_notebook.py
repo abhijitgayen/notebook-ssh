@@ -258,7 +258,12 @@ def setup_ngrok(authtoken: str) -> Tuple[str, int, subprocess.Popen]:
     """Install and start ngrok tcp tunnel in background."""
     log("Installing ngrok...")
     if not shutil.which("ngrok"):
-        run_cmd(["curl", "-sSL", "https://bin.equinox.io/c/bDfA1WdaZA2/ngrok-v3-stable-linux-amd64.tgz", "-o", "/tmp/ngrok.tgz"])
+        arch_res = run_cmd(["uname", "-m"])
+        arch = arch_res.stdout.strip()
+        pkg_arch = "amd64" if arch in ("x86_64", "amd64") else ("arm64" if "arm" in arch or "aarch64" in arch else "amd64")
+        url = f"https://bin.equinox.io/c/4VmDzA7iaHb/ngrok-stable-linux-{pkg_arch}.tgz"
+
+        run_cmd(["curl", "-sSL", url, "-o", "/tmp/ngrok.tgz"])
         run_cmd(["tar", "-xzf", "/tmp/ngrok.tgz", "-C", "/usr/local/bin"])
         if os.path.exists("/tmp/ngrok.tgz"):
             os.remove("/tmp/ngrok.tgz")
