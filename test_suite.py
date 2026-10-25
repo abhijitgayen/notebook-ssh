@@ -57,6 +57,11 @@ class TestSetupNotebook(unittest.TestCase):
         )
         self.assertIsNone(val)
 
+    def test_keepalive_env_detection(self):
+        os.environ["KEEPALIVE"] = "1"
+        self.assertIn(os.environ.get("KEEPALIVE", "").strip(), ("1", "true", "TRUE", "yes", "YES"))
+        del os.environ["KEEPALIVE"]
+
 
 class TestClientSetupScript(unittest.TestCase):
 

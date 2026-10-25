@@ -41,9 +41,11 @@ os.environ["SSH_PUBLIC_KEY"] = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleKey 
 os.environ["TUNNEL_PROVIDER"] = "cloudflared"  # Or "ngrok"
 # os.environ["NGROK_AUTHTOKEN"] = "your_ngrok_authtoken" # Required if TUNNEL_PROVIDER="ngrok"
 
-# 2. Clone repo and execute setup
-!git clone https://github.com/abhijitgayen/notebook-ssh.git && cd notebook-ssh && python3 setup_notebook.py
+# 2. Clone repo and execute setup with keep-alive
+!git clone https://github.com/abhijitgayen/notebook-ssh.git && cd notebook-ssh && python3 setup_notebook.py --keep-alive
 ```
+
+> **Note for Kaggle Users**: To prevent Kaggle from idling or dropping network interfaces when the notebook cell completes, `setup_notebook.py` runs a continuous keep-alive loop by default when executed in a non-interactive cell or with `--keep-alive`. Keep the cell running (`[*]`) while you work via SSH.
 
 ---
 
