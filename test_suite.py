@@ -41,6 +41,22 @@ class TestSetupNotebook(unittest.TestCase):
         self.assertEqual(val, "secret_val_123")
         del os.environ["TEST_SECRET_ENV"]
 
+    def test_get_optional_secret_env(self):
+        os.environ["TUNNEL_TOKEN"] = "token_abc_123"
+        val = setup_notebook.get_optional_secret(
+            ["CLOUDFLARE_TUNNEL_TOKEN", "TUNNEL_TOKEN"],
+            ["CLOUDFLARE_TUNNEL_TOKEN", "TUNNEL_TOKEN"]
+        )
+        self.assertEqual(val, "token_abc_123")
+        del os.environ["TUNNEL_TOKEN"]
+
+    def test_get_optional_secret_none(self):
+        val = setup_notebook.get_optional_secret(
+            ["NON_EXISTENT_ENV_VAR_123"],
+            ["NON_EXISTENT_COLAB_VAR_123"]
+        )
+        self.assertIsNone(val)
+
 
 class TestClientSetupScript(unittest.TestCase):
 

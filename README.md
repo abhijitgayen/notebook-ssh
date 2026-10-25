@@ -12,7 +12,9 @@ Below are clean, ready-to-use notebook cells for Google Colab and Kaggle environ
 
 1. **Set Up Colab Secrets (Key Icon in Left Sidebar)**:
    - Add `SSH_PUBLIC_KEY`: Contents of your `~/.ssh/id_ed25519.pub` file.
-   - Add `CLOUDFLARE_TUNNEL_TOKEN` (optional, if using Cloudflare Named / Zero Trust Tunnels) or `NGROK_AUTHTOKEN` (if using ngrok).
+   - Add `CLOUDFLARE_TUNNEL_TOKEN` or `TUNNEL_TOKEN` (optional, if using permanent Cloudflare Zero Trust Tunnels).
+   - Add `CLOUDFLARE_HOSTNAME` or `TUNNEL_HOSTNAME` (optional, e.g. `colab.yourdomain.com`).
+   - Add `NGROK_AUTHTOKEN` (if using ngrok).
 
 2. **Paste and Run in a Colab Notebook Cell**:
 
@@ -42,6 +44,53 @@ os.environ["TUNNEL_PROVIDER"] = "cloudflared"  # Or "ngrok"
 # 2. Clone repo and execute setup
 !git clone https://github.com/abhijitgayen/notebook-ssh.git && cd notebook-ssh && python3 setup_notebook.py
 ```
+
+---
+
+## Cloudflare Permanent Token Support (Named Tunnels)
+
+### How Permanent Cloudflare Tokens Work
+
+Instead of using ephemeral random URLs (like `*.trycloudflare.com`), you can set up a **Permanent Cloudflare Tunnel** (Named Tunnel) attached to your custom domain or Cloudflare Zero Trust account.
+
+#### Benefits:
+- **Fixed Hostname**: Always connect to the same custom domain (e.g. `ssh.yourdomain.com`).
+- **No Client Reconfiguration**: You run `client_setup.sh` once on your local computer, and you don't need to update `~/.ssh/config` every time a new notebook session starts.
+- **Enhanced Security**: Enforce Zero Trust Access policies (SSO, identity verification, IP rules) at Cloudflare's edge before SSH traffic reaches your notebook.
+
+---
+
+### Step-by-Step Guide for Cloudflare Permanent Token
+
+1. **Create a Cloudflare Tunnel**:
+   - Go to [Cloudflare Zero Trust Dashboard](https://one.dash.cloudflare.com/) -> **Networks** -> **Tunnels**.
+   - Click **Add a tunnel** -> Choose **Cloudflare** (`cloudflared`).
+   - Name your tunnel (e.g., `colab-ssh-tunnel`).
+   - Copy the generated tunnel token (`cloudflared tunnel run --token <YOUR_PERMANENT_TOKEN>`).
+
+2. **Configure Public Hostname**:
+   - Under Public Hostnames tab for the tunnel, add a public route:
+     - **Subdomain/Domain**: e.g. `colab.yourdomain.com`
+     - **Service Type**: `SSH`
+     - **URL**: `localhost:22`
+
+3. **Pass the Token to the Notebook**:
+   - **In Colab**: Add `CLOUDFLARE_TUNNEL_TOKEN` (or `TUNNEL_TOKEN`) and optionally `CLOUDFLARE_HOSTNAME` (`colab.yourdomain.com`) in **Colab Secrets** (key icon on left).
+   - **In Kaggle / Shell Environment**:
+     ```python
+     import os
+     os.environ["SSH_PUBLIC_KEY"] = "ssh-ed25519 AAAAC3N..."
+     os.environ["CLOUDFLARE_TUNNEL_TOKEN"] = "eyJh..."
+     os.environ["CLOUDFLARE_HOSTNAME"] = "colab.yourdomain.com"
+     !python3 setup_notebook.py
+     ```
+
+4. **One-Time Client Setup**:
+   On your local machine, configure SSH once:
+   ```bash
+   ./client_setup.sh --provider cloudflared --host colab.yourdomain.com --user dev
+   ```
+   Now you can simply run `ssh colab-ssh` whenever your notebook runtime starts!
 
 ---
 

@@ -112,6 +112,23 @@ def get_secret(env_var_name: str, colab_secret_name: str, prompt_label: str) -> 
     raise ValueError(f"Secret '{prompt_label}' not found in environment variable '{env_var_name}' or Colab Secret '{colab_secret_name}'.")
 
 
+def get_optional_secret(env_var_names: list, colab_secret_names: list) -> Optional[str]:
+    """Retrieve an optional secret from a list of environment variable or Colab secret names."""
+    for name in env_var_names:
+        val = os.environ.get(name, "").strip()
+        if val:
+            return val
+    try:
+        from google.colab import userdata  # type: ignore
+        for name in colab_secret_names:
+            val = userdata.get(name)
+            if val and str(val).strip():
+                return str(val).strip()
+    except Exception:
+        pass
+    return None
+
+
 def setup_sshd_and_user(username: str, pubkey: str) -> str:
     """Install OpenSSH server, create dedicated non-root user, configure SSH key and harden sshd."""
     if not is_root():
@@ -179,7 +196,7 @@ AllowUsers {username}
     return username
 
 
-def setup_cloudflared(tunnel_token: Optional[str] = None) -> Tuple[str, Optional[int]]:
+def setup_cloudflared(tunnel_token: Optional[str] = None, hostname_override: Optional[str] = None) -> Tuple[str, Optional[int]]:
     """Install and start cloudflared tunnel in background."""
     log("Installing cloudflared...")
     if not shutil.which("cloudflared"):
@@ -204,7 +221,15 @@ def setup_cloudflared(tunnel_token: Optional[str] = None) -> Tuple[str, Optional
         cmd = ["cloudflared", "tunnel", "--no-autoupdate", "run", "--token", tunnel_token]
         proc = subprocess.Popen(cmd, stdout=open(log_file, "a"), stderr=subprocess.STDOUT)
         time.sleep(3)
-        return "NAMED_TUNNEL", None
+        if proc.poll() is not None:
+            logs = ""
+            if os.path.exists(log_file):
+                with open(log_file, "r") as f:
+                    logs = f.read()
+            raise RuntimeError(f"Cloudflare tunnel process exited unexpectedly with code {proc.returncode}.\nLog output:\n{logs}")
+
+        display_host = hostname_override if hostname_override else "NAMED_TUNNEL"
+        return display_host, None
     else:
         # Quick Tunnel
         log("Using Cloudflare Quick Tunnel...")
@@ -305,17 +330,17 @@ def main():
         )
     elif provider == "cloudflared":
         # Cloudflare token is optional (Quick tunnel vs Named Tunnel)
-        token_env = os.environ.get("CLOUDFLARE_TUNNEL_TOKEN", "").strip()
-        if token_env:
-            tunnel_token = token_env
-        else:
-            try:
-                from google.colab import userdata  # type: ignore
-                val = userdata.get("CLOUDFLARE_TUNNEL_TOKEN")
-                if val:
-                    tunnel_token = str(val).strip()
-            except Exception:
-                pass
+        tunnel_token = get_optional_secret(
+            env_var_names=["CLOUDFLARE_TUNNEL_TOKEN", "TUNNEL_TOKEN"],
+            colab_secret_names=["CLOUDFLARE_TUNNEL_TOKEN", "TUNNEL_TOKEN"]
+        )
+
+    cf_hostname = None
+    if provider == "cloudflared" and tunnel_token:
+        cf_hostname = get_optional_secret(
+            env_var_names=["CLOUDFLARE_HOSTNAME", "TUNNEL_HOSTNAME"],
+            colab_secret_names=["CLOUDFLARE_HOSTNAME", "TUNNEL_HOSTNAME"]
+        )
 
     username = os.environ.get("SSH_USER", "dev")
 
@@ -324,7 +349,7 @@ def main():
 
     # 5. Launch Tunnel
     if provider == "cloudflared":
-        hostname, port = setup_cloudflared(tunnel_token)
+        hostname, port = setup_cloudflared(tunnel_token, cf_hostname)
     else:
         hostname, port = setup_ngrok(tunnel_token)
 
