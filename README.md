@@ -18,8 +18,8 @@ Below are clean, ready-to-use notebook cells for Google Colab and Kaggle environ
 
 ```python
 # 1. Clone the repository and navigate into it
-!git clone https://github.com/your-username/colab-ssh-tunnel.git
-%cd colab-ssh-tunnel
+!git clone https://github.com/abhijitgayen/notebook-ssh.git
+%cd notebook-ssh
 
 # 2. Run setup script (automatically detects Colab Secrets)
 !python3 setup_notebook.py
