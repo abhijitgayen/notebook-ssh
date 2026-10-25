@@ -196,7 +196,7 @@ AllowUsers {username}
     return username
 
 
-def setup_cloudflared(tunnel_token: Optional[str] = None, hostname_override: Optional[str] = None) -> Tuple[str, Optional[int]]:
+def setup_cloudflared(tunnel_token: Optional[str] = None, hostname_override: Optional[str] = None) -> Tuple[str, Optional[int], subprocess.Popen]:
     """Install and start cloudflared tunnel in background."""
     log("Installing cloudflared...")
     if not shutil.which("cloudflared"):
@@ -229,7 +229,7 @@ def setup_cloudflared(tunnel_token: Optional[str] = None, hostname_override: Opt
             raise RuntimeError(f"Cloudflare tunnel process exited unexpectedly with code {proc.returncode}.\nLog output:\n{logs}")
 
         display_host = hostname_override if hostname_override else "NAMED_TUNNEL"
-        return display_host, None
+        return display_host, None, proc
     else:
         # Quick Tunnel
         log("Using Cloudflare Quick Tunnel...")
@@ -251,10 +251,10 @@ def setup_cloudflared(tunnel_token: Optional[str] = None, hostname_override: Opt
         if not hostname:
             raise RuntimeError("Failed to retrieve Cloudflare quick tunnel URL. Check /tmp/cloudflared.log.")
 
-        return hostname, 22
+        return hostname, 22, proc
 
 
-def setup_ngrok(authtoken: str) -> Tuple[str, int]:
+def setup_ngrok(authtoken: str) -> Tuple[str, int, subprocess.Popen]:
     """Install and start ngrok tcp tunnel in background."""
     log("Installing ngrok...")
     if not shutil.which("ngrok"):
@@ -288,7 +288,42 @@ def setup_ngrok(authtoken: str) -> Tuple[str, int]:
     if not hostname or not port:
         raise RuntimeError("Failed to retrieve ngrok TCP tunnel endpoint. Check /tmp/ngrok.log.")
 
-    return hostname, port
+    return hostname, port, proc
+
+
+def keep_alive_loop(provider: str, tunnel_proc: subprocess.Popen, tunnel_token: Optional[str] = None, cf_hostname: Optional[str] = None) -> None:
+    """Run an active keep-alive loop to prevent Kaggle/Colab idle timeouts and monitor tunnel process health."""
+    log("Entering Keep-Alive loop to prevent notebook idle timeouts and maintain connection...")
+    log("Press Ctrl+C or stop the notebook cell to terminate.")
+
+    current_proc = tunnel_proc
+    check_interval = 15
+    counter = 0
+
+    try:
+        while True:
+            time.sleep(check_interval)
+            counter += 1
+
+            # 1. Check SSH daemon status
+            sshd_res = subprocess.run(["service", "ssh", "status"], capture_output=True, text=True)
+            if sshd_res.returncode != 0:
+                log_warn("SSH daemon stopped! Restarting sshd service...")
+                subprocess.run(["service", "ssh", "restart"], check=False)
+
+            # 2. Check Tunnel process status
+            if current_proc.poll() is not None:
+                log_warn(f"Tunnel process exited with code {current_proc.returncode}! Restarting tunnel...")
+                if provider == "cloudflared":
+                    _, _, current_proc = setup_cloudflared(tunnel_token, cf_hostname)
+                elif provider == "ngrok" and tunnel_token:
+                    _, _, current_proc = setup_ngrok(tunnel_token)
+
+            # Log periodic pulse every ~1 minute (4 intervals of 15s)
+            if counter % 4 == 0:
+                log(f"Keep-Alive Pulse #{counter // 4}: SSH service active, Tunnel PID {current_proc.pid} healthy.")
+    except KeyboardInterrupt:
+        log("Keep-Alive loop terminated by user.")
 
 
 def main():
@@ -349,9 +384,9 @@ def main():
 
     # 5. Launch Tunnel
     if provider == "cloudflared":
-        hostname, port = setup_cloudflared(tunnel_token, cf_hostname)
+        hostname, port, tunnel_proc = setup_cloudflared(tunnel_token, cf_hostname)
     else:
-        hostname, port = setup_ngrok(tunnel_token)
+        hostname, port, tunnel_proc = setup_ngrok(tunnel_token)
 
     # 6. Display Instructions
     print("\n" + "=" * 65)
@@ -379,6 +414,17 @@ def main():
     print("  [x] Authorized keys written with strict file permissions (0600)")
     print("  [x] Secrets kept out of source files and log output")
     print("=" * 65)
+
+    # 7. Check if Keep-Alive mode is enabled
+    enable_keep_alive = False
+    if "--keep-alive" in sys.argv or os.environ.get("KEEPALIVE", "").strip() in ("1", "true", "TRUE", "yes", "YES"):
+        enable_keep_alive = True
+    elif not sys.stdin.isatty():
+        # In non-interactive notebook environment (like Kaggle/Colab), default to keep-alive
+        enable_keep_alive = True
+
+    if enable_keep_alive:
+        keep_alive_loop(provider, tunnel_proc, tunnel_token, cf_hostname)
 
 
 if __name__ == "__main__":
