@@ -102,11 +102,14 @@ def get_secret(env_var_name: str, colab_secret_name: str, prompt_label: str) -> 
     except Exception:
         pass
 
-    # 3. Interactive Prompt
-    val = getpass.getpass(prompt=f"Enter {prompt_label}: ").strip()
-    if not val:
-        raise ValueError(f"{prompt_label} cannot be empty.")
-    return val
+    # 3. Interactive Prompt (only if stdin is interactive)
+    if sys.stdin.isatty():
+        val = getpass.getpass(prompt=f"Enter {prompt_label}: ").strip()
+        if not val:
+            raise ValueError(f"{prompt_label} cannot be empty.")
+        return val
+
+    raise ValueError(f"Secret '{prompt_label}' not found in environment variable '{env_var_name}' or Colab Secret '{colab_secret_name}'.")
 
 
 def setup_sshd_and_user(username: str, pubkey: str) -> str:
@@ -275,11 +278,14 @@ def main():
     # 1. Choose Provider
     provider = os.environ.get("TUNNEL_PROVIDER", "").lower()
     if provider not in ("cloudflared", "ngrok"):
-        print("\nSelect Tunnel Provider:")
-        print("  1) Cloudflare Tunnel (cloudflared) - Recommended")
-        print("  2) ngrok")
-        choice = input("Enter choice (1 or 2, default: 1): ").strip()
-        provider = "ngrok" if choice == "2" else "cloudflared"
+        if sys.stdin.isatty():
+            print("\nSelect Tunnel Provider:")
+            print("  1) Cloudflare Tunnel (cloudflared) - Recommended")
+            print("  2) ngrok")
+            choice = input("Enter choice (1 or 2, default: 1): ").strip()
+            provider = "ngrok" if choice == "2" else "cloudflared"
+        else:
+            provider = "cloudflared"
 
     # 2. Get Public Key securely
     raw_pubkey = get_secret(

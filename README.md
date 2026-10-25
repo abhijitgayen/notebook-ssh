@@ -2,6 +2,49 @@
 
 This repository provides a complete, production-grade, and security-hardened implementation for securely accessing Google Colab and Kaggle notebook runtimes via SSH using either **Cloudflare Tunnel (`cloudflared`)** or **`ngrok`**.
 
+---
+
+## Quick Start: Notebook Cell Setup
+
+Below are clean, ready-to-use notebook cells for Google Colab and Kaggle environments.
+
+### Option A: Google Colab (Recommended)
+
+1. **Set Up Colab Secrets (Key Icon in Left Sidebar)**:
+   - Add `SSH_PUBLIC_KEY`: Contents of your `~/.ssh/id_ed25519.pub` file.
+   - Add `CLOUDFLARE_TUNNEL_TOKEN` (optional, if using Cloudflare Named / Zero Trust Tunnels) or `NGROK_AUTHTOKEN` (if using ngrok).
+
+2. **Paste and Run in a Colab Notebook Cell**:
+
+```python
+# 1. Clone the repository and navigate into it
+!git clone https://github.com/your-username/colab-ssh-tunnel.git
+%cd colab-ssh-tunnel
+
+# 2. Run setup script (automatically detects Colab Secrets)
+!python3 setup_notebook.py
+```
+
+---
+
+### Option B: Kaggle / Environment Variables One-Liner
+
+If running on Kaggle or without Colab Secrets, pass parameters directly as environment variables in a single clean cell:
+
+```python
+import os
+
+# 1. Define required credentials
+os.environ["SSH_PUBLIC_KEY"] = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleKey user@localhost"
+os.environ["TUNNEL_PROVIDER"] = "cloudflared"  # Or "ngrok"
+# os.environ["NGROK_AUTHTOKEN"] = "your_ngrok_authtoken" # Required if TUNNEL_PROVIDER="ngrok"
+
+# 2. Clone repo and execute setup
+!git clone https://github.com/your-username/colab-ssh-tunnel.git && cd colab-ssh-tunnel && python3 setup_notebook.py
+```
+
+---
+
 ## Features & Defense-in-Depth
 
 - **Least Privilege Access**: Creates a dedicated non-root SSH user (`dev`) with restricted permissions instead of exposing `root`.
@@ -10,14 +53,6 @@ This repository provides a complete, production-grade, and security-hardened imp
 - **Zero Plaintext Secret Storage**: Secrets (SSH public key, authtokens) are provided via environment variables, Google Colab secrets (`userdata`), or interactive masked prompts (`getpass`). They are never saved into notebook cells or output logs.
 - **Enforced Host-Key Verification**: StrictHostKeyChecking is preserved on the local client (`StrictHostKeyChecking ask`). Host keys are never ignored (`/dev/null`), preserving Trust On First Use (TOFU) host verification.
 - **Safe SSH Config Management**: Creates automatic timestamped backups (`~/.ssh/config.backup_<timestamp>`), updates host blocks without duplication, and sets proper local permissions.
-
----
-
-## Deliverables in this Repository
-
-- `setup_notebook.py`: Python script for Google Colab or Kaggle cell execution (server-side setup).
-- `client_setup.sh`: Shell script for local machine setup (macOS / Linux / WSL).
-- `test_suite.py`: Automated test suite covering input validation, SSH config modification, backups, and secret handling.
 
 ---
 
@@ -41,56 +76,9 @@ cat ~/.ssh/id_ed25519.pub
 
 ---
 
-### Step 2: Set Up Tunnel Credentials
+### Step 2: Client-Side Setup (Local Machine)
 
-#### Option A: Cloudflare Tunnel (Recommended)
-1. **Quick Tunnels (No setup required)**: Cloudflare provides free, ephemeral tunnels (`*.trycloudflare.com`) out of the box without requiring a Cloudflare account.
-2. **Named Tunnels (Cloudflare Zero Trust / Access)**:
-   - Create a tunnel in the Cloudflare Zero Trust dashboard (`Tunnels -> Create a Tunnel`).
-   - Copy the Tunnel Token provided by Cloudflare.
-   - Configure an SSH Access Application in Cloudflare Zero Trust to enforce multi-factor authentication / Email OTP before granting access.
-
-#### Option B: ngrok
-1. Sign up for an account at [ngrok.com](https://ngrok.com).
-2. Retrieve your **Authtoken** from the ngrok dashboard.
-
----
-
-### Step 3: Run Server-Side Setup on Google Colab or Kaggle
-
-Add a cell in your notebook and run:
-
-```python
-# Save setup_notebook.py in the runtime or clone this repo
-!python3 setup_notebook.py
-```
-
-#### Secret Parameter Passing Options:
-To avoid interactive prompts, you can pass parameters via environment variables or Colab Secrets:
-
-**Using Environment Variables:**
-```python
-import os
-os.environ["SSH_PUBLIC_KEY"] = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI..."
-os.environ["TUNNEL_PROVIDER"] = "cloudflared" # or "ngrok"
-os.environ["NGROK_AUTHTOKEN"] = "your_ngrok_token" # if using ngrok
-
-!python3 setup_notebook.py
-```
-
-**Using Google Colab Secrets (`userdata`):**
-In Colab, click the **Secrets** tab (key icon in left panel) and add the following secrets:
-- `SSH_PUBLIC_KEY`: Your local SSH public key content.
-- `CLOUDFLARE_TUNNEL_TOKEN`: (Optional) Your Cloudflare Named Tunnel token.
-- `NGROK_AUTHTOKEN`: (Optional) Your ngrok authtoken.
-
-When execution completes, the script outputs the exact client command to execute locally.
-
----
-
-### Step 4: Run Client-Side Setup (Local Machine)
-
-Clone or download `client_setup.sh` onto your local machine and execute the command printed by the notebook cell:
+Clone or download `client_setup.sh` onto your local machine and execute the command printed by the notebook cell output:
 
 #### For Cloudflare Tunnel:
 ```bash
@@ -112,7 +100,7 @@ The script will:
 
 ---
 
-### Step 5: Connect via SSH
+### Step 3: Connect via SSH
 
 Connect to your remote notebook session with a single command:
 
